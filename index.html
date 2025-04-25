@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Chord Diagram CSV Editor</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 20px;
+      background-color: #f8f8f8;
+    }
+
+    .sticky-controls {
+      position: sticky;
+      top: 0;
+      background-color: white;
+      padding: 10px;
+      z-index: 100;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      font-family: monospace;
+    }
+
+    .sticky-controls input,
+    .sticky-controls button {
+      font-family: monospace;
+      padding: 4px 8px;
+      font-size: 14px;
+    }
+
+    #diagram-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-family: monospace;
+    }
+
+    /* Row for each chord entry */
+    .diagram-wrapper {
+      display: flex;
+      align-items: flex-start;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Left info block */
+    .diagram-wrapper>div:first-child {
+      min-width: 180px;
+      margin-right: 20px;
+      font-size: 13px;
+      word-break: break-word;
+      font-family: monospace;
+    }
+
+    /* Right side image */
+    .diagram-wrapper img {
+      max-height: 100px;
+      height: auto;
+      object-fit: contain;
+      margin-left: 20px;
+    }
+
+    /* Chord chart + inputs */
+    .chord-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: monospace;
+    }
+
+    .dot {
+      width: 90%;
+      height: 90%;
+      background-color: black;
+      color: white;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-family: monospace;
+      box-sizing: border-box;
+      transform: translateX(-7.5px);
+    }
+
+
+
+    .fretboard {
+      display: grid;
+      grid-template-columns: repeat(6, 15px);
+      grid-template-rows: repeat(5, 15px);
+      gap: 0;
+    }
+
+    .fretboard>div {
+      box-sizing: border-box;
+      width: 15px;
+      height: 15px;
+      border-left: 1px solid #000;
+      border-top: 1px solid #000;
+    }
+
+    .barre-line {
+      width: 100%;
+      height: 3px;
+      background-color: black;
+      margin: auto 0;
+      border-radius: 2px;
+      transform: translateX(-7.5px);
+    }
+
+    /* Marker row (X, O) */
+    .marker-labels {
+      display: grid;
+      grid-template-columns: repeat(6, 15px);
+      gap: 0px;
+      margin-bottom: 2px;
+      transform: translateX(-7.5px);
+    }
+
+    /* String labels (E A D G B e) */
+    .string-labels {
+      display: grid;
+      grid-template-columns: repeat(6, 15px);
+      gap: 0px;
+      transform: translateX(-7.5px);
+    }
+
+    /* Input field below chord for editing */
+    .edit-fingers input[type="text"] {
+      font-family: monospace;
+      font-size: 13px;
+      padding: 3px;
+      width: 140px;
+      margin-top: 4px;
+    }
+
+    .edit-fingers button {
+      font-family: monospace;
+      font-size: 13px;
+      padding: 3px 8px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="sticky-controls">
+    <label for="from_key">From Key:</label>
+    <input type="number" id="from_key" placeholder="e.g. 1" value="1" style="width: 60px;">
+    <label for="to_key">To Key:</label>
+    <input type="number" id="to_key" placeholder="e.g. 100" value="100" style="width: 60px;">
+    <button onclick="renderRange()">Render Range</button>
+    <label for="filter-root">Root:</label>
+    <select id="filter-root">
+      <option value="">All</option>
+    </select>
+
+
+    <label for="filter-suffix-long">Suffix:</label>
+    <select id="filter-suffix-long">
+    </select>
+
+
+
+
+    <label for="filter-bass">Bass:</label>
+    <select id="filter-bass">
+      <option value="">All</option>
+    </select>
+    <button onclick="downloadCSV()">Download guitar_db.csv</button>
+  </div>
+
+  <div id="diagram-list"></div>
+
+  <script>
+    window.chordCalls = [];
+    window.visibleChordIndexes = [];
+
+    function addChord(key, shape, fingers, imageURL, chord = '', chord_long = '', root = '', suffix = '', suffix_long = '', bass = '') {
+      const index = window.chordCalls.length;
+      window.chordCalls.push({
+        key, shape, fingers, imageURL,
+        chord, chord_long, root, suffix, suffix_long, bass,
+        index
+      });
+    }
+
+    function renderDiagram(key, shape, fingers, imageURL, index = -1) {
+      const size = 15;
+      const frets = shape.map(f => parseInt(f)).filter(f => !isNaN(f) && f > 0);
+      const minFret = frets.length > 0 ? Math.min(...frets) : 1;
+      const maxFret = frets.length > 0 ? Math.max(...frets) : 1;
+      const offset = maxFret > 5 ? (minFret - 1) : 0;
+
+      const markerRow = `<div style="padding-top:15px;display: grid; grid-template-columns: repeat(6, ${size}px); gap: 0px; margin-bottom: 2px;transform: translateX(-7.5px);">
+      ${shape.map(val => {
+        if (val === 'x') return `<div style="text-align:center;">×</div>`;
+        if (val === '0') return `<div style="text-align:center;">○</div>`;
+        return `<div></div>`;
+      }).reverse().join('')}
+    </div>`;
+
+      const labels = ['E', 'A', 'D', 'G', 'B', 'e'].map(label =>
+        `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;transform: translateX(-7.5px);">${label}</div>`
+      ).join('');
+
+      const rowFingerMap = {};
+      for (let col = 0; col < 6; col++) {
+        const fret = parseInt(shape[col]);
+        const adj = isNaN(fret) || fret === 0 ? fret : fret - offset;
+        const finger = fingers[col];
+        if (!isNaN(adj) && finger !== '0') {
+          const row = adj - 1;
+          rowFingerMap[row] ??= {};
+          rowFingerMap[row][finger] ??= [];
+          rowFingerMap[row][finger].push(col);
+        }
+      }
+
+      let fretboard = `<div class="fretboard" style="display: grid; grid-template-columns: repeat(6, ${size}px); grid-template-rows: repeat(5, ${size}px); gap: 0px;">`;
+      for (let row = 0; row < 5; row++) {
+        for (let col = 5; col >= 0; col--) {
+          const string = col;
+          const fret = parseInt(shape[string]);
+          const adj = isNaN(fret) || fret === 0 ? fret : fret - offset;
+          const finger = fingers[string];
+          const isDot = !isNaN(adj) && (adj - 1 === row);
+          let content = '';
+          if (isDot) {
+            content = `<div class="dot" title="Finger ${finger}">${finger}</div>`;
+          } else if (rowFingerMap[row]) {
+            for (const f in rowFingerMap[row]) {
+              const cols = rowFingerMap[row][f];
+              if (cols.length >= 2 && col > Math.min(...cols) && col < Math.max(...cols)) {
+                content = `<div class="barre-line" data-finger="${f}"></div>`;
+              }
+            }
+          }
+
+          let isFirstCol = col === 5;
+          let isLastCol = col === 0;
+          let isLastRow = row === 4;
+
+          let borders = '';
+
+          // Top border
+          if (!isLastCol) {
+            if (row === 0) borders += 'border-top: 2px solid #000;';
+            else borders += 'border-top: 1px solid #000;';
+          } else {
+            borders += 'border-top: 0;';
+          }
+
+          // Bottom border
+          if (isLastRow && !isLastCol) {
+            borders += 'border-bottom: 1px solid #000;';
+          } else if (isLastRow && isLastCol) {
+            borders += 'border-bottom: 0;';
+          }
+
+          fretboard += `<div style="width:${size}px;height:${size}px;border-left:1px solid #000;${borders} display:flex;align-items:center;justify-content:center;">${content}</div>`;
+
+        }
+      }
+      fretboard += `</div>`;
+
+      const editUI = `
+        <div class="edit-fingers" style="padding-top:10px;">
+          <input type="hidden" id="fingers-${index}" value="${fingers.join(',')}">
+          ${[1, 2, 3, 4, 5, 6].map(i => {
+        const shapeIndex = 6 - i;
+        const isDisabled = (shape[shapeIndex] === "0" || shape[shapeIndex] === "x");
+        const readonlyAttr = isDisabled ? 'readonly' : '';
+        const style = `width: 30px;${isDisabled ? ' background-color: #eee; color: #888;' : ''}`;
+        return `<input type="number" id="fing${i}-${index}" min="0" max="4" value="${fingers[shapeIndex]}"
+              style="${style}" ${readonlyAttr}
+              onchange="updateIndividualFingers(${index})"
+              onfocus="this.select()">`;
+      }).join(' ')}
+        </div>
+      `;
+
+      const chordData = window.chordCalls[index];
+
+      const output = `
+      <div class="diagram-wrapper">
+        <div style="width: 140px; font-weight: bold; font-size: 0.8rem;">
+          <div style="font-size: 1rem; margin-bottom: 4px;">${chordData.chord_long || chordData.chord}</div>
+                <div style="display: flex; justify-content: space-between;">
+        <span>key:</span><span>${key}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Shape:</span><span>${shape}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Fingers:</span><span>${fingers}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>From Fret:</span><span>fr(${parseInt(offset) + 1})</span>
+      </div>
+        </div>
+        <div style="width:350px;">
+          ${markerRow}${fretboard}
+          <div style="display:grid; grid-template-columns: repeat(6, ${size}px); gap:0px;">${labels}</div>
+          ${editUI}
+        </div>
+              <div style="margin-top: 6px; text-align: center;">
+        <img src="${imageURL}" alt="Chord Image" style="max-height:130px;"><br>
+        <div style="font-size:0.7rem; word-break: break-all;">${imageURL.replace(/^jguitar\//, '')}</div>
+      </div>
+      </div>`;
+
+      document.getElementById('diagram-list').innerHTML += output;
+    }
+
+    function drawFromCalls() {
+      const listEl = document.getElementById('diagram-list');
+      listEl.innerHTML = '';
+
+      window.visibleChordIndexes.forEach(index => {
+        const { key, shape, fingers, imageURL } = window.chordCalls[index];
+        renderDiagram(key, shape, fingers, imageURL, index);
+      });
+    }
+
+
+
+
+
+    function check() {
+      const rootFilter = document.getElementById('filter-root').value.toLowerCase().trim();
+      const suffixLongFilter = document.getElementById('filter-suffix-long').value.toLowerCase().trim();
+      const bassFilter = document.getElementById('filter-bass').value.toLowerCase().trim();
+
+      const listEl = document.getElementById('diagram-list');
+      listEl.innerHTML = '<p style="font-style: italic; color: gray;">Filtering diagrams...</p>';
+
+      setTimeout(() => {
+        listEl.innerHTML = '';
+        window.visibleChordIndexes = [];
+
+        window.chordCalls.forEach(({ key, shape, fingers, imageURL, index, root, suffix_long, bass }) => {
+          root = (root || '').toLowerCase().trim();
+          suffix_long = (suffix_long || '').toLowerCase().trim();
+          bass = (bass || '').toLowerCase().trim();
+
+          if (
+            (rootFilter && root !== rootFilter) ||
+            (suffixLongFilter && suffix_long !== suffixLongFilter) ||
+            (bassFilter && bass !== bassFilter)
+          ) return;
+
+          window.visibleChordIndexes.push(index);
+          renderDiagram(key, shape, fingers, imageURL, index);
+        });
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 0);
+    }
+
+
+
+    function renderRange() {
+      const fromKey = parseInt(document.getElementById('from_key').value);
+      const toKey = parseInt(document.getElementById('to_key').value);
+
+      const listEl = document.getElementById('diagram-list');
+      listEl.innerHTML = '<p style="font-style: italic; color: gray;">Rendering range...</p>';
+
+      setTimeout(() => {
+        listEl.innerHTML = '';
+        window.visibleChordIndexes = [];
+
+        window.chordCalls.forEach(({ key, shape, fingers, imageURL, index }) => {
+          if (!isNaN(fromKey) && !isNaN(toKey) && (key < fromKey || key > toKey)) return;
+          window.visibleChordIndexes.push(index);
+          renderDiagram(key, shape, fingers, imageURL, index);
+        });
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 0);
+    }
+
+
+
+    function populateFilterOptions() {
+      const rootSet = new Set();
+      const suffixLongSet = new Set();
+      const bassSet = new Set();
+
+      window.chordCalls.forEach(c => {
+        if (c.root) rootSet.add(c.root);
+        if (c.suffix_long) suffixLongSet.add(c.suffix_long);
+        if (c.bass) bassSet.add(c.bass);
+      });
+
+      function fillSelect(id, values) {
+        const select = document.getElementById(id);
+        values.sort().forEach(val => {
+          const option = document.createElement('option');
+          option.value = val;
+          option.textContent = val;
+          select.appendChild(option);
+        });
+      }
+
+      fillSelect('filter-root', Array.from(rootSet));
+
+      const suffixGroups = {
+        "Triads": [
+          "Major", "Minor", "Diminished", "Augmented",
+          "Suspended 2nd", "Suspended 4th", "Major Flat 5th", "Minor Sharp 5th",
+          "Minor Double Flat 5th", "Suspended 4th Sharp 5th", "Suspended 2nd Flat 5th", "Suspended 2nd Sharp 5th"
+        ],
+        "Seventh Chords": [
+          "7th", "Minor 7th", "Major 7th", "Minor Major 7th", "Diminished 7th",
+          "Augmented 7th", "Augmented Major 7th", "7th Flat 5th", "Major 7th Flat 5th",
+          "Minor 7th Flat 5th", "Minor Major 7th Flat 5th", "Minor Major 7th Double Flat 5th",
+          "Minor 7th Sharp 5th", "Minor Major 7th Sharp 5th", "7th Flat 9th"
+        ],
+        "Sixth Chords": [
+          "6th", "Minor 6th", "6th Flat 5th", "6th Add 9th", "Minor 6th Add 9th"
+        ],
+        "Ninth Chords": [
+          "9th", "Minor 9th", "Major 9th", "Minor Major 9th", "9th Flat 5th",
+          "Augmented 9th", "9th Suspended 4th", "7th Sharp 9th", "7th Sharp 9th Flat 5th",
+          "Augmented Major 9th"
+        ],
+        "Eleventh Chords": [
+          "11th", "Minor 11th", "Major 11th", "Minor Major 11th", "Major Sharp 11th"
+        ],
+        "Thirteenth Chords": [
+          "13th", "Minor 13th", "Major 13th", "Minor Major 13th"
+        ],
+        "Suspended Chords": [
+          "7th Suspended 2nd", "Major 7th Suspended 2nd", "7th Suspended 4th",
+          "Major 7th Suspended 4th", "7th Suspended 2nd Sharp 5th", "7th Suspended 4th Sharp 5th",
+          "Major 7th Suspended 4th Sharp 5th", "Suspended 2nd Suspended 4th",
+          "7th Suspended 2nd Suspended 4th", "Major 7th Suspended 2nd Suspended 4th"
+        ],
+        "Miscellaneous": [
+          "5th", "Major Add 9th"
+        ]
+      };
+
+      const suffixSelect = document.getElementById('filter-suffix-long');
+      suffixSelect.innerHTML = ''; // Clear any existing options
+
+      for (const groupLabel in suffixGroups) {
+        const group = document.createElement('optgroup');
+        group.label = groupLabel;
+
+        suffixGroups[groupLabel].forEach(val => {
+          const option = document.createElement('option');
+          option.value = val;
+          option.textContent = val;
+          if (val === "Major") option.selected = true;
+          group.appendChild(option);
+        });
+
+        suffixSelect.appendChild(group);
+      }
+
+
+      fillSelect('filter-bass', Array.from(bassSet));
+    }
+
+
+
+    function downloadCSV() {
+      const header = "key;shape;fingers;image;chord;chord_long;root;suffix;suffix_long;bass";
+      const lines = window.chordCalls.map(c =>
+        `${c.key};${JSON.stringify(c.shape)};${JSON.stringify(c.fingers)};${c.imageURL};${c.chord};${c.chord_long};${c.root};${c.suffix};${c.suffix_long};${c.bass}`
+      );
+      const csvContent = [header, ...lines].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'guitar_db.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+
+    function updateIndividualFingers(index) {
+      const values = [];
+      for (let i = 6; i >= 1; i--) {
+        const val = document.getElementById(`fing${i}-${index}`).value.trim() || "0";
+        values.push(parseInt(val));
+      }
+      window.chordCalls[index].fingers = values; // Ensure it's an array of numbers
+
+      // Update hidden input if needed (not essential for data)
+      document.getElementById(`fingers-${index}`).value = values.join(',');
+
+      // Re-render visible chords
+      document.getElementById('diagram-list').innerHTML = '';
+      drawFromCalls();
+    }
+
+
+  </script>
+
+  <script>
+    fetch('guitar_db.csv?nocache=' + Date.now())
+      .then(res => res.text())
+      .then(csv => {
+        csv.trim().split('\n').slice(1).forEach(line => {
+          const [key, shapeStr, fingersStr, image, chord, chord_long, root, suffix, suffix_long, bass] = line.split(';');
+          const shape = JSON.parse(shapeStr);
+          const fingers = JSON.parse(fingersStr);
+          addChord(parseInt(key), shape, fingers, image, chord, chord_long, root, suffix, suffix_long, bass);
+        });
+        populateFilterOptions();
+        renderRange();
+      })
+      .catch(err => {
+        console.error('Failed to load guitar_db.csv:', err);
+        document.getElementById('diagram-list').innerHTML = '<p style="color:red;">Failed to load guitar_db.csv</p>';
+      });
+  </script>
+  <script>
+    ['filter-root', 'filter-suffix-long', 'filter-bass'].forEach(id => {
+      document.getElementById(id).addEventListener('change', check);
+    });
+  </script>
+
+</body>
+
+</html>
