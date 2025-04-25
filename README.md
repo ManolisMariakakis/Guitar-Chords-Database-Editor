@@ -6,7 +6,7 @@ For each chord entry:
 - The **chord name**, **shape**, and **image** have been taken from [jguitar.com](https://www.jguitar.com), ensuring a reliable reference.
 - A **visual chord diagram** is rendered
 - Editable **finger positions** are provided (fingering numbers are mostly assigned dynamically based on heuristic rules)
-- An **image preview** is shown — taken from [jguitar.com](https://www.jguitar.com), specifically the **first (and typically simplest) variation** of the chord.
+- An **image preview** is shown — sourced from [jguitar.com](https://www.jguitar.com), specifically the **first (and typically simplest) variation** of the chord.
   ⚠️ The images are over **12,000 files**, stored in a ZIP archive (`jguitar.zip`).
   ➡️ Before running the program, you **must extract the archive** into a folder named `jguitar` placed in the same directory as the HTML file.
 - The program allows visual comparison so users can **verify accuracy or correct fingerings** directly via the editor
