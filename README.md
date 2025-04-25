@@ -90,3 +90,16 @@ Ensure the array always contains **6 items**, even if some are `"x"` or `"0"`.
 - Uses cache-busting via `?nocache=Date.now()` to ensure the CSV always loads fresh.
 
 ---
+
+## 📁 Project Files
+
+This project includes the following key files:
+
+| File Name      | Description |
+|----------------|-------------|
+| `index.html`   | The main application file that loads and renders guitar chord diagrams in the browser. |
+| `curl.bat`     | A batch script used to download or sync chord data images from jguitar.com using `curl`. |
+| `guitar_db.csv` | A CSV file containing the guitar chord database with names, fingerings, and fret positions. |
+| `jguitar.zip`  | An archive containing chord images sourced from jGuitar.com. |
+
+---
